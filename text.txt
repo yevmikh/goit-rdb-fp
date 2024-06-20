@@ -1,0 +1,167 @@
+-- p1 , p2 
+
+CREATE SCHEMA pandemic ;
+
+USE pandemic;
+
+CREATE TABLE IF NOT EXISTS entities (
+entity_id INT AUTO_INCREMENT PRIMARY KEY, 
+entity VARCHAR(50),
+code VARCHAR(50)
+);
+
+CREATE TABLE IF NOT EXISTS cases (
+cases_id INT AUTO_INCREMENT PRIMARY KEY, 
+entity_id INT,
+year YEAR,
+polio_cases INT,
+cases_guinea_worm INT,
+number_yaws VARCHAR(50),
+number_rabies VARCHAR(50),
+number_malaria VARCHAR(50),
+number_hiv VARCHAR(50),
+number_tuberculosis VARCHAR(50),
+number_smallpox VARCHAR(50),
+number_cholera_cases VARCHAR(50),
+FOREIGN KEY(entity_id) REFERENCES entities(entity_id) ON DELETE SET NULL);
+
+INSERT INTO entities (entity, code)
+SELECT DISTINCT Entity, Code FROM infectious_cases;
+
+
+INSERT INTO cases (entity_id, year, polio_cases, cases_guinea_worm, number_yaws, number_rabies, number_malaria, number_hiv, number_tuberculosis, number_smallpox, number_cholera_cases)
+SELECT e.entity_id, ic.Year, ic.polio_cases, ic.cases_guinea_worm, ic.Number_yaws, ic.Number_rabies, ic.Number_malaria, ic.Number_hiv, ic.Number_tuberculosis, ic.Number_smallpox, ic.Number_cholera_cases
+FROM infectious_cases ic
+JOIN entities e ON ic.Entity = e.entity AND ic.Code = e.code;
+
+
+--converting VARCHAR to FLOAT, 
+
+UPDATE cases
+SET 
+    number_yaws = CASE WHEN number_yaws = '' THEN NULL ELSE number_yaws END,
+    number_rabies = CASE WHEN number_rabies = '' THEN NULL ELSE number_rabies END,
+    number_malaria = CASE WHEN number_malaria = '' THEN NULL ELSE number_malaria END,
+    number_hiv = CASE WHEN number_hiv = '' THEN NULL ELSE number_hiv END,
+    number_tuberculosis = CASE WHEN number_tuberculosis = '' THEN NULL ELSE number_tuberculosis END,
+    number_smallpox = CASE WHEN number_smallpox = '' THEN NULL ELSE number_smallpox END,
+    number_cholera_cases = CASE WHEN number_cholera_cases = '' THEN NULL ELSE number_cholera_cases END
+WHERE 
+    number_yaws = '' OR
+    number_rabies = '' OR
+    number_malaria = '' OR
+    number_hiv = '' OR
+    number_tuberculosis = '' OR
+    number_smallpox = '' OR
+    number_cholera_cases = '';
+    
+    UPDATE cases
+SET 
+    number_yaws = IF(number_yaws != '', REGEXP_REPLACE(number_yaws, '[^0-9.-]', ''), NULL),
+    number_rabies = IF(number_rabies IS NOT NULL, REGEXP_REPLACE(number_rabies, '[^0-9.-]', ''), NULL),
+    number_malaria = IF(number_malaria != '', REGEXP_REPLACE(number_malaria, '[^0-9.-]', ''), NULL),
+    number_hiv = IF(number_hiv != '', REGEXP_REPLACE(number_hiv, '[^0-9.-]', ''), NULL),
+    number_tuberculosis = IF(number_tuberculosis != '', REGEXP_REPLACE(number_tuberculosis, '[^0-9.-]', ''), NULL),
+    number_smallpox = IF(number_smallpox != '', REGEXP_REPLACE(number_smallpox, '[^0-9.-]', ''), NULL),
+    number_cholera_cases = IF(number_cholera_cases != '', REGEXP_REPLACE(number_cholera_cases, '[^0-9.-]', ''), NULL)
+WHERE 
+    number_yaws REGEXP '[^0-9.-]' OR
+    number_rabies REGEXP '[^0-9.-]' OR
+    number_malaria REGEXP '[^0-9.-]' OR
+    number_hiv REGEXP '[^0-9.-]' OR
+    number_tuberculosis REGEXP '[^0-9.-]' OR
+    number_smallpox REGEXP '[^0-9.-]' OR
+    number_cholera_cases REGEXP '[^0-9.-]';
+
+ALTER TABLE cases
+MODIFY number_yaws FLOAT,
+MODIFY number_rabies FLOAT,
+MODIFY number_malaria FLOAT,
+MODIFY number_hiv FLOAT,
+MODIFY number_tuberculosis FLOAT,
+MODIFY number_smallpox FLOAT,
+MODIFY number_cholera_cases FLOAT;
+
+SELECT *
+FROM cases
+WHERE number_yaws IS NULL OR
+      number_rabies IS NULL OR
+      number_malaria IS NULL OR
+      number_hiv IS NULL OR
+      number_tuberculosis IS NULL OR
+      number_smallpox IS NULL OR
+      number_cholera_cases IS NULL;
+
+
+-- p3 
+
+SELECT 
+    e.entity_id,
+    e.entity,
+    e.code,
+    a.avg_rabies,
+    a.min_rabies,
+    a.max_rabies,
+    a.sum_rabies
+FROM 
+    entities e
+JOIN 
+    (
+        SELECT 
+            entity_id,
+            AVG(number_rabies) AS avg_rabies,
+            MIN(number_rabies) AS min_rabies,
+            MAX(number_rabies) AS max_rabies,
+            SUM(number_rabies) AS sum_rabies
+        FROM 
+            cases
+        GROUP BY 
+            entity_id
+    ) a ON e.entity_id = a.entity_id
+ORDER BY 
+    a.avg_rabies DESC
+LIMIT 10;
+
+-- p4 
+
+
+SELECT 
+year, 
+MAKEDATE(year, 1) beg_of_year, 
+CURDATE() current__date,
+TIMESTAMPDIFF(YEAR, MAKEDATE(year, 1), CURDATE()) years_diff 
+FROM cases ;
+
+
+-- p5 
+
+-- function 
+
+DROP FUNCTION IF EXISTS year_function 
+
+DELIMITER //
+
+CREATE FUNCTION year_function ( year INT )
+RETURNS INT 
+DETERMINISTIC
+NO SQL 
+BEGIN 
+	DECLARE beg_of_year DATE;
+    DECLARE current__date DATE;
+    DECLARE result INT;
+    
+    SET beg_of_year = MAKEDATE(year, 1); 
+    SET current__date = CURDATE();
+    
+    SET result = TIMESTAMPDIFF(YEAR, beg_of_year, current__date);
+    RETURN result;
+    
+END //
+
+DELIMITER ;   
+  
+  -- executable 
+
+  SELECT year, year_function(year) years_diff
+  FROM cases;
+
